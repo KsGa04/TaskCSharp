@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using System.Xml.Linq;
-using static System.Net.Mime.MediaTypeNames;
+using Newtonsoft.Json;
 
 namespace TaskCSharp.Controllers
 {
@@ -8,8 +7,15 @@ namespace TaskCSharp.Controllers
     [Route("api/[controller]")]
     public class TaskCSharp : ControllerBase
     {
-        [HttpGet("{inputString}")]
-        public ActionResult<string> ManipulateString(string inputString, string algorithm)
+        private readonly IHttpClientFactory _httpClientFactory;
+
+        public TaskCSharp(IHttpClientFactory httpClientFactory)
+        {
+            _httpClientFactory = httpClientFactory;
+        }
+
+        [HttpGet("{inputString}/{algorithm}")]
+        public async Task<ActionResult<string>> ManipulateStringAsync(string inputString, string algorithm)
         {
             if (string.IsNullOrEmpty(inputString))
                 return BadRequest("Text is required");
@@ -56,10 +62,25 @@ namespace TaskCSharp.Controllers
                 default:
                     return BadRequest("Invalid algorithm");
             }
+            string modifiedString = "";
+            Random random = new Random();
 
-            //return Ok(new string(characters));
+            try
+            {
+                int randomNumber = await GetRandomNumberFromApiAsync(result.Length);
+                if (randomNumber >= result.Length)
+                {
+                    return BadRequest("Generated random number is out of bounds.");
+                }
+                modifiedString = result.Remove(randomNumber, 1);
+            }
+            catch (Exception)
+            {
+                int randomNumber = random.Next(result.Length);
+                modifiedString = result.Remove(randomNumber, 1);
+            }
 
-            return $"Processed string: {result}\nCharacter count: {string.Join("\n", charCount.Select(c => $"{c.Key}: {c.Value}"))} \nMax Vowel Substring: {maxVowelSubstring} \n Sorted string: {new string(characters)}";
+            return $"Processed string: {result}\nCharacter count: {string.Join("\n", charCount.Select(c => $"{c.Key}: {c.Value}"))} \nMax Vowel Substring: {maxVowelSubstring} \n Sorted string: {new string(characters)} \n Update string: {modifiedString}";
         }
         /// <summary>
         /// Task 2
@@ -216,6 +237,17 @@ namespace TaskCSharp.Controllers
                 sortedList.Add(node.Value);
                 InOrderTraversal(node.Right, sortedList);
             }
+        }
+        //Task 6
+        private async Task<int> GetRandomNumberFromApiAsync(int length)
+        {
+            var httpClient = _httpClientFactory.CreateClient();
+            string apiUrl = $"http://www.randomnumberapi.com/api/v1.0/random?min=0&count=1&max={length}";
+            var response = await httpClient.GetAsync(apiUrl);
+            response.EnsureSuccessStatusCode();
+
+            var randomNumber = await response.Content.ReadAsStringAsync();
+            return int.Parse(randomNumber);
         }
     }
 }

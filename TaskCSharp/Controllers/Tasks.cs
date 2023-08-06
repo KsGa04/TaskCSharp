@@ -80,7 +80,7 @@ namespace TaskCSharp.Controllers
                 modifiedString = result.Remove(randomNumber, 1);
             }
 
-            return $"Processed string: {result}\nCharacter count: {string.Join("\n", charCount.Select(c => $"{c.Key}: {c.Value}"))} \nMax Vowel Substring: {maxVowelSubstring} \n Sorted string: {new string(characters)} \n Update string: {modifiedString}";
+            return Ok($"Processed string: {result}\nCharacter count: {string.Join("\n", charCount.Select(c => $"{c.Key}: {c.Value}"))} \nMax Vowel Substring: {maxVowelSubstring} \n Sorted string: {new string(characters)} \n Update string: {modifiedString}");
         }
         /// <summary>
         /// Task 2

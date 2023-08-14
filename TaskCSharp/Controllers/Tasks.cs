@@ -1,5 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using System.Net.Http;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace TaskCSharp.Controllers
 {
@@ -8,13 +11,17 @@ namespace TaskCSharp.Controllers
     public class TaskCSharp : ControllerBase
     {
         private readonly IHttpClientFactory _httpClientFactory;
-
-        public TaskCSharp(IHttpClientFactory httpClientFactory)
+        private readonly BlacklistOptions _blacklist;
+        private readonly IConfiguration _configuration;
+        public TaskCSharp(IHttpClientFactory httpClientFactory, IOptions<BlacklistOptions> blacklistOptions, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
+            _blacklist = blacklistOptions.Value;
+            _configuration = configuration;
         }
-
+        
         [HttpGet("{inputString}/{algorithm}")]
+
         public async Task<ActionResult<string>> ManipulateStringAsync(string inputString, string algorithm)
         {
             if (string.IsNullOrEmpty(inputString))
@@ -22,6 +29,14 @@ namespace TaskCSharp.Controllers
 
             if (string.IsNullOrEmpty(algorithm))
                 return BadRequest("Algorithm is required");
+
+            foreach (string blacklistedWord in _blacklist.Words)
+            {
+                if (string.Equals(blacklistedWord, inputString, StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest("The word is blacklisted.");
+                }
+            }
 
             if (!CheckValidCharacters(inputString))
             {
@@ -67,6 +82,7 @@ namespace TaskCSharp.Controllers
 
             try
             {
+
                 int randomNumber = await GetRandomNumberFromApiAsync(result.Length);
                 if (randomNumber >= result.Length)
                 {
@@ -241,8 +257,9 @@ namespace TaskCSharp.Controllers
         //Task 6
         private async Task<int> GetRandomNumberFromApiAsync(int length)
         {
+            string apiUrl = _configuration.GetConnectionString("RandomNumberAPI");
             var httpClient = _httpClientFactory.CreateClient();
-            string apiUrl = $"http://www.randomnumberapi.com/api/v1.0/random?min=0&count=1&max={length}";
+            //string apiUrl = $"http://www.randomnumberapi.com/api/v1.0/random?min=0&count=1&max={length}";
             var response = await httpClient.GetAsync(apiUrl);
             response.EnsureSuccessStatusCode();
 

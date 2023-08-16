@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using System.Net.Http;
+using System.Threading;
 using static System.Net.Mime.MediaTypeNames;
 
 namespace TaskCSharp.Controllers
@@ -13,90 +14,106 @@ namespace TaskCSharp.Controllers
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly BlacklistOptions _blacklist;
         private readonly IConfiguration _configuration;
-        public TaskCSharp(IHttpClientFactory httpClientFactory, IOptions<BlacklistOptions> blacklistOptions, IConfiguration configuration)
+        private readonly RequestCounterService _requestCounterService;
+        public TaskCSharp(IHttpClientFactory httpClientFactory, IOptions<BlacklistOptions> blacklistOptions, IConfiguration configuration, RequestCounterService requestCounterService)
         {
             _httpClientFactory = httpClientFactory;
             _blacklist = blacklistOptions.Value;
             _configuration = configuration;
+            _requestCounterService = requestCounterService;
         }
         
         [HttpGet("{inputString}/{algorithm}")]
 
         public async Task<ActionResult<string>> ManipulateStringAsync(string inputString, string algorithm)
         {
-            if (string.IsNullOrEmpty(inputString))
-                return BadRequest("Text is required");
-
-            if (string.IsNullOrEmpty(algorithm))
-                return BadRequest("Algorithm is required");
-
-            foreach (string blacklistedWord in _blacklist.Words)
+            bool isSlotAcquired = await _requestCounterService.TryAcquireRequestSlot();
+            if (!isSlotAcquired)
             {
-                if (string.Equals(blacklistedWord, inputString, StringComparison.OrdinalIgnoreCase))
-                {
-                    return BadRequest("The word is blacklisted.");
-                }
+                return StatusCode(StatusCodes.Status503ServiceUnavailable);
             }
-
-            if (!CheckValidCharacters(inputString))
-            {
-                return BadRequest("Invalid characters: " + GetInvalidCharacters(inputString));
-            }
-
-            string result = "";
-
-            if (inputString.Length % 2 == 0)
-            {
-                int halfLength = inputString.Length / 2;
-                string firstHalf = inputString.Substring(0, halfLength);
-                string secondHalf = inputString.Substring(halfLength);
-                string reversedFirstHalf = ReverseString(firstHalf);
-                string reversedSecondHalf = ReverseString(secondHalf);
-                result = reversedFirstHalf + reversedSecondHalf;
-            }
-            else
-            {
-                string reversedInputString = ReverseString(inputString);
-                result = reversedInputString + inputString;
-            }
-            Dictionary<char, int> charCount = GetCharacterCount(result);
-            string maxVowelSubstring = FindMaxVowelSubstring(result);
-
-
-
-            char[] characters = result.ToCharArray();
-
-            switch (algorithm.ToLower())
-            {
-                case "quicksort":
-                    QuickSort(characters, 0, characters.Length - 1);
-                    break;
-                case "treesort":
-                    characters = TreeSort(characters).ToArray();
-                    break;
-                default:
-                    return BadRequest("Invalid algorithm");
-            }
-            string modifiedString = "";
-            Random random = new Random();
-
             try
             {
 
-                int randomNumber = await GetRandomNumberFromApiAsync(result.Length);
-                if (randomNumber >= result.Length)
-                {
-                    return BadRequest("Generated random number is out of bounds.");
-                }
-                modifiedString = result.Remove(randomNumber, 1);
-            }
-            catch (Exception)
-            {
-                int randomNumber = random.Next(result.Length);
-                modifiedString = result.Remove(randomNumber, 1);
-            }
 
-            return Ok($"Processed string: {result}\nCharacter count: {string.Join("\n", charCount.Select(c => $"{c.Key}: {c.Value}"))} \nMax Vowel Substring: {maxVowelSubstring} \n Sorted string: {new string(characters)} \n Update string: {modifiedString}");
+                if (string.IsNullOrEmpty(inputString))
+                    return BadRequest("Text is required");
+
+                if (string.IsNullOrEmpty(algorithm))
+                    return BadRequest("Algorithm is required");
+
+                foreach (string blacklistedWord in _blacklist.Words)
+                {
+                    if (string.Equals(blacklistedWord, inputString, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return BadRequest("The word is blacklisted.");
+                    }
+                }
+
+                if (!CheckValidCharacters(inputString))
+                {
+                    return BadRequest("Invalid characters: " + GetInvalidCharacters(inputString));
+                }
+
+                string result = "";
+
+                if (inputString.Length % 2 == 0)
+                {
+                    int halfLength = inputString.Length / 2;
+                    string firstHalf = inputString.Substring(0, halfLength);
+                    string secondHalf = inputString.Substring(halfLength);
+                    string reversedFirstHalf = ReverseString(firstHalf);
+                    string reversedSecondHalf = ReverseString(secondHalf);
+                    result = reversedFirstHalf + reversedSecondHalf;
+                }
+                else
+                {
+                    string reversedInputString = ReverseString(inputString);
+                    result = reversedInputString + inputString;
+                }
+                Dictionary<char, int> charCount = GetCharacterCount(result);
+                string maxVowelSubstring = FindMaxVowelSubstring(result);
+
+
+
+                char[] characters = result.ToCharArray();
+
+                switch (algorithm.ToLower())
+                {
+                    case "quicksort":
+                        QuickSort(characters, 0, characters.Length - 1);
+                        break;
+                    case "treesort":
+                        characters = TreeSort(characters).ToArray();
+                        break;
+                    default:
+                        return BadRequest("Invalid algorithm");
+                }
+                string modifiedString = "";
+                Random random = new Random();
+
+                try
+                {
+
+                    int randomNumber = await GetRandomNumberFromApiAsync(result.Length);
+                    if (randomNumber >= result.Length)
+                    {
+                        return BadRequest("Generated random number is out of bounds.");
+                    }
+                    modifiedString = result.Remove(randomNumber, 1);
+                }
+                catch (Exception)
+                {
+                    int randomNumber = random.Next(result.Length);
+                    modifiedString = result.Remove(randomNumber, 1);
+                }
+
+                return Ok($"Processed string: {result}\nCharacter count: {string.Join("\n", charCount.Select(c => $"{c.Key}: {c.Value}"))} \nMax Vowel Substring: {maxVowelSubstring} \n Sorted string: {new string(characters)} \n Update string: {modifiedString}");
+            }
+            finally
+            {
+                _requestCounterService.ReleaseRequestSlot();
+            }
         }
         /// <summary>
         /// Task 2

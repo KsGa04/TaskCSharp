@@ -22,7 +22,7 @@ namespace TaskCSharp.Controllers
             _configuration = configuration;
             _requestCounterService = requestCounterService;
         }
-        
+
         [HttpGet("{inputString}/{algorithm}")]
 
         public async Task<ActionResult<string>> ManipulateStringAsync(string inputString, string algorithm)
@@ -34,8 +34,6 @@ namespace TaskCSharp.Controllers
             }
             try
             {
-
-
                 if (string.IsNullOrEmpty(inputString))
                     return BadRequest("Text is required");
 
@@ -110,15 +108,16 @@ namespace TaskCSharp.Controllers
 
                 return Ok($"Processed string: {result}\nCharacter count: {string.Join("\n", charCount.Select(c => $"{c.Key}: {c.Value}"))} \nMax Vowel Substring: {maxVowelSubstring} \n Sorted string: {new string(characters)} \n Update string: {modifiedString}");
             }
+
             finally
             {
                 _requestCounterService.ReleaseRequestSlot();
             }
         }
-        /// <summary>
-        /// Task 2
-        /// </summary>
-        private bool CheckValidCharacters(string input)
+    /// <summary>
+    /// Task 2
+    /// </summary>
+    private bool CheckValidCharacters(string input)
         {
             string allowedCharacters = "abcdefghijklmnopqrstuvwxyz";
             return input.All(c => allowedCharacters.Contains(c));
